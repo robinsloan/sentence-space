@@ -83,6 +83,7 @@ class LMReconstructionModel(BaseModel):
 
         kld = 0.5 * T.sum(1 + log_sigma - mu ** 2 - T.exp(log_sigma), axis=1)
         eps = 0.001 if self.aux_loss else 0.0
+
         if self.anneal:
             kld_weight = T.clip((self.step - self.anneal_start) / (self.anneal_end - self.anneal_start), 0, 1 - eps) + eps
         else:
@@ -95,6 +96,7 @@ class LMReconstructionModel(BaseModel):
 
         if self.aux_loss:
             return [cost, T.mean(reconstruction_loss), T.mean(kld), T.mean(aux_reconstruction_loss)]
+            #return [cost, T.mean(reconstruction_loss), T.mean(kld), T.mean(aux_reconstruction_loss), T.mean(kld_weight)]
         else:
             return [cost, T.mean(reconstruction_loss), T.mean(kld)]
 

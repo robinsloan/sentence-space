@@ -197,7 +197,7 @@ def main(z, sample_size, p, encdec_layers, lstm_size, pad_string, mode, alpha):
     decoder_from_z = model.layers[1].branches[0]
     x = T.fmatrix('x')
     from_z = decoder_from_z(x)#sampled.astype(theano.config.floatX))
-    
+
     layers = model.layers[-3:]
     layers[0] = LNLSTMStep(layers[0])
     step = Sequential(layers)
@@ -250,15 +250,15 @@ def main(z, sample_size, p, encdec_layers, lstm_size, pad_string, mode, alpha):
         #for i in xrange(w.shape[1]):
         #    for idx in w[:, i]:
         #        print(idx)
-        
+
         results = []
 
         for i in xrange(w.shape[1]):
             s = [vocab.by_index(idx) for idx in w[:, i]]
             r = ''.join(s)
             print '--------'
-            print r            
-                
+            print r
+
             results.append(r)
 
         '''

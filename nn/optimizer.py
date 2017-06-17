@@ -6,7 +6,10 @@ import datetime
 import os
 import shutil
 import utils
-
+import pandas as pd
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 class Optimizer:
     def __init__(self, model, train_db, valid_db, param_updates, grad_clip=None, disconnected_inputs='raise',
@@ -102,7 +105,7 @@ class Optimizer:
             if os.path.exists(model_filename):
                 self.model.load(model_filename, silent=True)
             else:
-                raise Exception("can not restore model from %s, file not found" % model_filename)
+                raise Exception("cannot restore model from %s, file not found" % model_filename)
             print "ok"
 
             vars_filename = "%s/vars.flt" % self.opt_folder
@@ -114,29 +117,28 @@ class Optimizer:
             print "ok, lr = %f" % self.param_updates.lr.get_value()
 
     def make_files(self, folder_per_exp):
-        if self.print_info:
-            assert self.name is not None, "name should not be None if print_norms is True"
         if self.name is not None:
-            if folder_per_exp:
-                timestamp = datetime.datetime.fromtimestamp(int(time.time())).strftime('%Y-%m-%d-%H-%M-%S')
-                self.opt_folder = "exp/%s/%s" % (self.name, timestamp)
-            else:
-                self.opt_folder = "exp/%s" % self.name
+            self.opt_folder = "session/%s" % self.name
 
             if os.path.exists(self.opt_folder) is False:
                 os.makedirs(self.opt_folder)
-            print "current folder %s" % self.opt_folder
+            print "Working in directory %s" % self.opt_folder
 
             mode = "a" if self.restore else "w"
             self.train_log_f = open("%s/log.train.csv" % self.opt_folder, mode, 0)
             self.valid_log_f = open("%s/log.valid.csv" % self.opt_folder, mode, 0)
             if self.print_info:
                 self.info_f = open(self.opt_folder + "/info.csv", "w", buffering=0)
+        else:
+            raise Exception("You must specify a session name!")
 
     def get_valid_costs(self, db):
         test_costs = []
 
         self.model.reset()
+
+        db.shuffle_and_make_batches()
+
         for idx in db.indices():
             c = self.test_net(idx)
             c = c[0:self.orig_costs_len]
@@ -172,7 +174,10 @@ class Optimizer:
             cost = []
             iteration = 0
             self.model.reset()
+
+            self.train_db.shuffle_and_make_batches()
             t = time.time()
+
             for idx in self.train_db.indices():
                 iteration += 1
                 total_iteration += 1
@@ -198,6 +203,7 @@ class Optimizer:
                     print "validation...",
                     cost = self.get_valid_costs(self.valid_db)
 
+
                     print "cost =", cost
                     self.print_to_log("valid", total_iteration, cost)
 
@@ -211,6 +217,14 @@ class Optimizer:
                     if done == 1.:
                         epoch += 1
                     self.save_state(epoch, total_iteration, best_cost)
+
+                    # plot!
+                    data = pd.read_csv("%s/log.valid.csv" % self.opt_folder, header=None, usecols=[0,1,2])
+
+                    plt.plot(data[0], data[1], linewidth=1)
+                    plt.plot(data[0], data[2], linewidth=1)
+                    plt.savefig("%s/cost_graph.pdf" % self.opt_folder, format='pdf')
+
                     if best:
                         shutil.copy('%s/model.flt' % self.opt_folder, '%s/best.flt' % self.opt_folder)
 

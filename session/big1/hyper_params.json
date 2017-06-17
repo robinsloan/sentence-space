@@ -1,0 +1,1 @@
+{"p": 0.0, "lstm_size": 1024, "dataset": "bigcorpus256.txt", "max_len": 128, "alpha": 0.2, "z": 128}

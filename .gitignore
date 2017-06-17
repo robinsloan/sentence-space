@@ -1,0 +1,7 @@
+session_names.txt
+*.pyc
+data/*
+training_scripts/*
+
+session/*
+!session/big1/
