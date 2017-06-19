@@ -81,6 +81,9 @@ class LMReconstructionModel(BaseModel):
         mu = s.mu
         log_sigma = s.log_sigma
 
+        # could put a beta here
+        # per https://github.com/miyosuda/disentangled_vae/blob/master/vae.py
+
         kld = 0.5 * T.sum(1 + log_sigma - mu ** 2 - T.exp(log_sigma), axis=1)
         eps = 0.001 if self.aux_loss else 0.0
 

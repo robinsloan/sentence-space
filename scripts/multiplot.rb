@@ -24,7 +24,7 @@ sessions.each do |session|
   kld = []
 
   ctr = 0
-  nth_line = 5
+  nth_line = 20
 
   data.each do |line|
     ctr += 1
@@ -36,11 +36,11 @@ sessions.each do |session|
   end
 
   plt.plot(time, cost, '-', {:label => "#{session} cost"})
-  plt.plot(time, kld, '--', {:label => "#{session} kld"})
+  #plt.plot(time, kld, '--', {:label => "#{session} kld"})
 
   session_ctr += 1
 
-  if (session_ctr % 5 == 0) || (session_ctr == sessions.length)
+  if (session_ctr % 6 == 0) || (session_ctr == sessions.length)
     plt.legend({:loc => 'best'})
     plt.ylim([0,200])
     plt.savefig("fig_#{session_ctr}.pdf", {:format => "pdf"})

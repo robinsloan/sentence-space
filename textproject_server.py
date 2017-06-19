@@ -15,9 +15,8 @@ from lm_vae import Sampler
 from lm_vae_sample import LNLSTMStep
 from textproject_vae_charlevel import make_model
 
-from flask import Flask
-
 import time
+import math
 
 t0 = time.time()
 
@@ -28,7 +27,7 @@ def to_inputs(sentence, vocab, max_len):
         chars.append(vocab.by_word("<pad>"))
     return numpy.asarray(chars)
 
-session = "big1"
+session = "1_bigcorpus_z128_alpha0.2_max64"
 
 vocab = Vocabulary()
 
@@ -67,7 +66,8 @@ model.load("session/%s/model.flt" % session)
 model.set_phase(train=False)
 
 start_word = n_classes
-n = 10
+
+n = 33 # an odd number, so there's one in the center!
 
 encoder = model.layers[0].branches[0]
 sampler = encoder[-1]
@@ -209,7 +209,30 @@ def jitter(s1, n):
 
     return s1_z
 
-def print_results(w):
+def get_z(s1):
+    t1 = time.time()
+
+    s1 = to_inputs(s1, vocab, max_len)
+    encoder = model.layers[0].branches[0]
+    sampler = encoder[-1]
+    assert isinstance(sampler, Sampler)
+    ins = numpy.zeros((max_len, 1))
+    ins[:, 0] = s1
+    x = T.imatrix()
+    z = encoder(x)
+
+    mu = sampler.mu
+    f = theano.function([x], mu)
+    z = f(ins.astype('int32'))
+
+    s1_z = z[0]
+
+    t2 = time.time()
+    print("get_z thing took %f secs" % (t2-t1) )
+
+    return s1_z.tolist()
+
+def render_results(w):
     results = []
 
     pad = vocab.by_word("<pad>")
@@ -232,24 +255,69 @@ def print_results(w):
 
 def serve(s1, s2):
     w = f(interpolate(s1,s2,n).astype(theano.config.floatX))
-    return print_results(w)
+    return render_results(w)
 
 def serve_jitter(s1):
     t1 = time.time()
-    w = f(jitter(s1,n).astype(theano.config.floatX))
+    w = f(jitter(s1, n).astype(theano.config.floatX))
     t2 = time.time()
-    print("f took %f secs" % (t2-t1) )
+    print("serve_jitter f took %f secs" % (t2-t1) )
     t1 = time.time()
-    res = print_results(w)
+    res = render_results(w)
     t2 = time.time()
     print("print took %f secs" % (t2-t1) )
     return res
+
+def serve_mod(z, dim, magnitude):
+    t1 = time.time()
+
+    s1_z = numpy.array(z).astype(theano.config.floatX)
+    s1_z = numpy.repeat(s1_z[None, :], n, axis=0)
+
+    half_n_floor = int(math.floor(n/2))
+    mod_eps = 0.1
+    neg_steps = numpy.linspace(-magnitude, -mod_eps, half_n_floor)
+    pos_steps = numpy.linspace(mod_eps, magnitude, half_n_floor)
+
+    steps = numpy.zeros(n)
+    # this is all a bit awkward...
+    steps[0:half_n_floor] = neg_steps
+    steps[half_n_floor+1] = 0.0
+    steps[-half_n_floor:] = pos_steps
+
+    offset = 8
+    steps = numpy.repeat(steps[None, :], offset, axis=0)
+    steps = numpy.rollaxis(steps, 1) # !!!???
+    print(steps.shape)
+
+    s1_z[:, (dim*offset):(dim*offset)+offset] += steps
+
+    w = f(s1_z.astype(theano.config.floatX))
+
+    t2 = time.time()
+    print("serve_mod f took %f secs" % (t2-t1) )
+
+    t1 = time.time()
+    res = render_results(w)
+
+    t2 = time.time()
+    print("print took %f secs" % (t2-t1) )
+
+    return s1_z.tolist(), res
+
+def serve_get_z(s1):
+    t1 = time.time()
+    z = get_z(s1) # a list
+    t2 = time.time()
+    print("serve_get_z f took %f secs" % (t2-t1) )
+    return z
 
 t1 = time.time()
 print("Model startup took %i seconds" % (t1-t0))
 
 from flask import Flask
 from flask import request
+from flask import jsonify
 
 app = Flask(__name__)
 
@@ -268,6 +336,18 @@ def textserve_jitter():
     print(s1)
     results = serve_jitter(s1)
     return ''.join(results)
+
+@app.route('/textserve_get_z', methods=['POST'])
+def textserve_get_z():
+    json = request.get_json()
+    z = serve_get_z(json["s1"])
+    return jsonify({"z": z})
+
+@app.route('/textserve_mod', methods=['POST'])
+def textserve_mod():
+    json = request.get_json()
+    z, text = serve_mod(json["z"], json["dim"], json["magnitude"])
+    return jsonify({"z": z, "text": text})
 
 """
 if __name__ == '__main__':

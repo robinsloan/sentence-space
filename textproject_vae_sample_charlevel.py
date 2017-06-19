@@ -128,8 +128,8 @@ def main(session):
         steps = numpy.linspace(0, 1, n)[:, None]
         sampled = s1_z * (1 - steps) + s2_z * steps
     elif mode == 'custom':
-        s1 = "He looked up into the sky."
-        s2 = "I couldn't believe what I was seeing."
+        s1 = "The plane crashed into the ocean."
+        s2 = "I love you!"
         s1 = to_inputs(s1, vocab, max_len)
         s2 = to_inputs(s2, vocab, max_len)
         encoder = model.layers[0].branches[0]
