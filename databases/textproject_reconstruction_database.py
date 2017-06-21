@@ -56,6 +56,11 @@ class TextProjectReconstructionDatabase(object):
 
         self.batches_per_epoch = int(len(self.sentences) / batch_size)
 
+        # per the original textvae code, let's just keep this lean
+        if self.phase == 'valid':
+            print "Reducing valid set to 100 batches"
+            self.batches_per_epoch = min(self.batches_per_epoch, 100)
+
         self.shuffle_and_make_batches()
 
         #x = self.make_batch()

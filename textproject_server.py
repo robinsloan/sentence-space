@@ -1,4 +1,4 @@
-import json, sys, os, pickle
+import json, sys, os, pickle, time, math
 import argparse
 import numpy
 import theano
@@ -15,17 +15,7 @@ from lm_vae import Sampler
 from lm_vae_sample import LNLSTMStep
 from textproject_vae_charlevel import make_model
 
-import time
-import math
-
-t0 = time.time()
-
-def to_inputs(sentence, vocab, max_len):
-    chars = [vocab.by_word(ch, oov_word="<unk>") for ch in sentence]
-    chars.append(vocab.by_word("<end>"))
-    for i in xrange(max_len - len(sentence) - 1):
-        chars.append(vocab.by_word("<pad>"))
-    return numpy.asarray(chars)
+t1 = time.time()
 
 session = "1_bigcorpus_z128_alpha0.2_max64"
 
@@ -73,7 +63,6 @@ encoder = model.layers[0].branches[0]
 sampler = encoder[-1]
 
 start_words = numpy.ones(n) * start_word
-
 start_words = theano.shared(start_words.astype('int32'))
 #sampled = theano.shared(sampled.astype(theano.config.floatX))
 
@@ -105,23 +94,35 @@ generated = T.concatenate(generated, axis=0)
 f = theano.function([x], outputs=generated)
 
 print("Compiled!")
-print("Ready for serving...")
+print("Ready for serving.")
 
-def encode(s1, n):
-    #s1 = "hello"
-    s1 = to_inputs(s1, vocab, max_len)
-    #encoder = model.layers[0].branches[0]
-    #sampler = encoder[-1]
-    x = T.imatrix()
-    z = encoder(x)
-    #print(sampler.mu)
-    mu = sampler.mu
-    f = theano.function([x], mu)
-    ins = numpy.zeros((max_len, 1))
-    ins[:, 0] = s1
-    z = f(ins.astype('int32'))
-    sampled = numpy.repeat(z[0][None, :], n, axis=0)
-    return sampled
+def to_inputs(sentence, vocab, max_len):
+    chars = [vocab.by_word(ch, oov_word="<unk>") for ch in sentence]
+    chars.append(vocab.by_word("<end>"))
+    for i in xrange(max_len - len(sentence) - 1):
+        chars.append(vocab.by_word("<pad>"))
+    return numpy.asarray(chars)
+
+def render_results(w):
+    results = []
+
+    pad = vocab.by_word("<pad>")
+    end = vocab.by_word("<end>")
+
+    for i in xrange(w.shape[1]):
+        s = []
+        for idx in w[:, i]:
+            if idx == end:
+                break
+            if idx == pad:
+                break
+            s.append(vocab.by_index(idx))
+        r = ''.join(s)
+        print r.strip()
+
+        results.append(r)
+
+    return results
 
 def explore_dimension(s1, dim, n):
     #s1 = "<unk> caller to a local radio station said cocaine"
@@ -199,7 +200,6 @@ def jitter(s1, n):
 
     s1_z = numpy.repeat(s1_z[None, :], n, axis=0)
 
-
     for i in xrange(n):
         perturb = numpy.random.rand(num_dims) / 1.5
         s1_z[i, :] = s1_z[i, :] + perturb
@@ -232,28 +232,7 @@ def get_z(s1):
 
     return s1_z.tolist()
 
-def render_results(w):
-    results = []
-
-    pad = vocab.by_word("<pad>")
-    end = vocab.by_word("<end>")
-
-    for i in xrange(w.shape[1]):
-        s = []
-        for idx in w[:, i]:
-            if idx == end:
-                break
-            if idx == pad:
-                break
-            s.append(vocab.by_index(idx))
-        r = ''.join(s)
-        print r.strip()
-
-        results.append(r)
-
-    return results
-
-def serve(s1, s2):
+def serve_interpolation(s1, s2):
     w = f(interpolate(s1,s2,n).astype(theano.config.floatX))
     return render_results(w)
 
@@ -305,6 +284,29 @@ def serve_mod(z, dim, magnitude):
 
     return s1_z.tolist(), res
 
+def serve_toward_target(z, target_z, magnitude):
+    t1 = time.time()
+
+    s1_z = numpy.array(z).astype(theano.config.floatX)
+    s2_z = numpy.array(target_z).astype(theano.config.floatX)
+
+    s1_z = numpy.repeat(s1_z[None, :], n, axis=0)
+    s2_z = numpy.repeat(s2_z[None, :], n, axis=0)
+
+    steps = numpy.linspace(0.0, 1.0, n)[:, None]
+    #jitter = numpy.random.random_sample(steps.shape) * steps
+
+    interpolated_z = s1_z * (1 - steps) + s2_z * (steps)
+
+    w = f(interpolated_z.astype(theano.config.floatX))
+
+    t2 = time.time()
+    print("serve_toward_target took %f secs" % (t2-t1) )
+
+    rendered = render_results(w)
+
+    return interpolated_z.tolist(), rendered
+
 def serve_get_z(s1):
     t1 = time.time()
     z = get_z(s1) # a list
@@ -312,8 +314,8 @@ def serve_get_z(s1):
     print("serve_get_z f took %f secs" % (t2-t1) )
     return z
 
-t1 = time.time()
-print("Model startup took %i seconds" % (t1-t0))
+t2 = time.time()
+print("Model startup took %i seconds" % (t2-t1))
 
 from flask import Flask
 from flask import request
@@ -321,7 +323,7 @@ from flask import jsonify
 
 app = Flask(__name__)
 
-@app.route('/textserve', methods=['GET'])
+@app.route('/textserve_interpolate', methods=['GET'])
 def textserve():
     s1 = request.args.get('s1')
     s2 = request.args.get('s2')
@@ -348,6 +350,12 @@ def textserve_mod():
     json = request.get_json()
     z, text = serve_mod(json["z"], json["dim"], json["magnitude"])
     return jsonify({"z": z, "text": text})
+
+@app.route('/textserve_target', methods=['POST'])
+def textserve_target():
+    json = request.get_json()
+    new_z, new_text = serve_toward_target(json["z"], json["target_z"], json["magnitude"])
+    return jsonify({"z": new_z, "text": new_text})
 
 """
 if __name__ == '__main__':

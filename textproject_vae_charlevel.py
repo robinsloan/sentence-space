@@ -145,7 +145,7 @@ def main(z, lr, anneal_start, anneal_end, p, alpha, lstm_size, num_epochs, max_l
 
     decay_after_num_epochs = num_epochs * 0.7
 
-    opt.train(num_epochs, decay_after=decay_after_num_epochs, lr_decay=0.95, decay_schedule_in_iters=False)
+    opt.train(epochs=num_epochs, decay_after=decay_after_num_epochs, lr_decay=0.95, decay_schedule_in_iters=False)
 
 
 if __name__ == '__main__':
@@ -157,7 +157,7 @@ if __name__ == '__main__':
     parser.add_argument('-p', default=0.0, type=float)
     parser.add_argument('-alpha', default=0.2, type=float)
     parser.add_argument('-lstm_size', default=1000, type=int)
-    parser.add_argument('-num_epochs', default=50, type=int)
+    parser.add_argument('-num_epochs', default=10, type=int)
     parser.add_argument('-max_len', default=128, type=int)
     parser.add_argument('-batch_size', default=32, type=int)
     parser.add_argument('-session', type=str)
