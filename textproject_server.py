@@ -93,7 +93,8 @@ for i in xrange(max_len):
 generated = T.concatenate(generated, axis=0)
 f = theano.function([x], outputs=generated)
 
-print("Compiled!")
+t2 = time.time()
+print("Startup took %i seconds!" % (t2-t1))
 print("Ready for serving.")
 
 def to_inputs(sentence, vocab, max_len):
@@ -178,37 +179,6 @@ def interpolate(s1, s2, n):
     sampled = s1_z * (1 - steps) + s2_z * steps
     return sampled
 
-def jitter(s1, n):
-    t1 = time.time()
-
-    s1 = to_inputs(s1, vocab, max_len)
-    encoder = model.layers[0].branches[0]
-    sampler = encoder[-1]
-    assert isinstance(sampler, Sampler)
-    ins = numpy.zeros((max_len, 1))
-    ins[:, 0] = s1
-    x = T.imatrix()
-    z = encoder(x)
-
-    mu = sampler.mu
-    f = theano.function([x], mu)
-    z = f(ins.astype('int32'))
-
-    s1_z = z[0]
-    #n = 15
-    num_dims = len(s1_z) # BEFORE we do the repeat
-
-    s1_z = numpy.repeat(s1_z[None, :], n, axis=0)
-
-    for i in xrange(n):
-        perturb = numpy.random.rand(num_dims) / 1.5
-        s1_z[i, :] = s1_z[i, :] + perturb
-
-    t2 = time.time()
-    print("whole jitter thing took %f secs" % (t2-t1) )
-
-    return s1_z
-
 def get_z(s1):
     t1 = time.time()
 
@@ -223,29 +193,20 @@ def get_z(s1):
 
     mu = sampler.mu
     f = theano.function([x], mu)
-    z = f(ins.astype('int32'))
+    s1_z = f(ins.astype('int32'))
 
-    s1_z = z[0]
+    w = f(s1_z.astype(theano.config.floatX))
+
+    rendered = render_results(w)
 
     t2 = time.time()
-    print("get_z thing took %f secs" % (t2-t1) )
+    print("get_z took %f secs" % (t2-t1) )
 
-    return s1_z.tolist()
+    return s1_z.tolist(), rendered
 
 def serve_interpolation(s1, s2):
     w = f(interpolate(s1,s2,n).astype(theano.config.floatX))
     return render_results(w)
-
-def serve_jitter(s1):
-    t1 = time.time()
-    w = f(jitter(s1, n).astype(theano.config.floatX))
-    t2 = time.time()
-    print("serve_jitter f took %f secs" % (t2-t1) )
-    t1 = time.time()
-    res = render_results(w)
-    t2 = time.time()
-    print("print took %f secs" % (t2-t1) )
-    return res
 
 def serve_mod(z, dim, magnitude):
     t1 = time.time()
@@ -308,14 +269,8 @@ def serve_toward_target(z, target_z, magnitude):
     return interpolated_z.tolist(), rendered
 
 def serve_get_z(s1):
-    t1 = time.time()
-    z = get_z(s1) # a list
-    t2 = time.time()
-    print("serve_get_z f took %f secs" % (t2-t1) )
-    return z
-
-t2 = time.time()
-print("Model startup took %i seconds" % (t2-t1))
+    z, text = get_z(s1)
+    return z, text
 
 from flask import Flask
 from flask import request
@@ -342,8 +297,8 @@ def textserve_jitter():
 @app.route('/textserve_get_z', methods=['POST'])
 def textserve_get_z():
     json = request.get_json()
-    z = serve_get_z(json["s1"])
-    return jsonify({"z": z})
+    z, text = serve_get_z(json["s1"])
+    return jsonify({"z": z, "text": text})
 
 @app.route('/textserve_mod', methods=['POST'])
 def textserve_mod():

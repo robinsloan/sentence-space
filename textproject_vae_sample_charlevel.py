@@ -128,7 +128,7 @@ def main(session):
         steps = numpy.linspace(0, 1, n)[:, None]
         sampled = s1_z * (1 - steps) + s2_z * steps
     elif mode == 'custom':
-        s1 = "The plane crashed into the ocean."
+        s1 = "The rocket rose over the planet's surface."
         s2 = "I love you!"
         s1 = to_inputs(s1, vocab, max_len)
         s2 = to_inputs(s2, vocab, max_len)
