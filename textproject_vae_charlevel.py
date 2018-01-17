@@ -19,7 +19,6 @@ from nn.containers import Sequential, Parallel
 from nn.normalization import BatchNormalization
 import nn.utils
 
-
 def make_model(z, sample_size, dropword_p, n_classes, lstm_size, alpha):
     encoder = [
         OneHot(n_classes),
@@ -102,8 +101,11 @@ def make_model(z, sample_size, dropword_p, n_classes, lstm_size, alpha):
     return model
 
 def main(z, lr, anneal_start, anneal_end, p, alpha, lstm_size, num_epochs, max_len, batch_size, session, dataset, resume):
-    train_db = TextProjectReconstructionDatabase(dataset=dataset, phase="train", batch_size=batch_size, max_len=max_len)
-    valid_db = TextProjectReconstructionDatabase(dataset=dataset, phase="valid", batch_size=batch_size, max_len=max_len)
+
+    sp_model = "/home/robin/dev/water-margin/sp/sf256.model"
+
+    train_db = TextProjectReconstructionDatabase(dataset=dataset, phase="train", batch_size=batch_size, max_len=max_len, sp_model=sp_model or None)
+    valid_db = TextProjectReconstructionDatabase(dataset=dataset, phase="valid", batch_size=batch_size, max_len=max_len, sp_model=sp_model or None)
 
     model = make_model(z, max_len, p, train_db.n_classes, lstm_size, alpha)
     model.anneal_start = float(anneal_start)
@@ -140,7 +142,8 @@ def main(z, lr, anneal_start, anneal_end, p, alpha, lstm_size, num_epochs, max_l
         "lstm_size": lstm_size,
         "alpha": alpha,
         "dataset": dataset,
-        "vocab": "vocab.pkl"
+        "vocab": "vocab.pkl",
+        "sp_model": sp_model or None
     })
 
     decay_after_num_epochs = num_epochs * 0.7

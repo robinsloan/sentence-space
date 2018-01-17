@@ -15,9 +15,11 @@ from lm_vae import Sampler
 from lm_vae_sample import LNLSTMStep
 from textproject_vae_charlevel import make_model
 
+import sentencepiece as spm # https://github.com/google/sentencepiece/tree/ma$
+
 t1 = time.time()
 
-session = "1_bigcorpus_z128_alpha0.2_max64"
+session = "sp11_trial"
 
 vocab = Vocabulary()
 
@@ -25,7 +27,7 @@ if os.path.exists("session/%s/vocab.pkl" % session):
     with open("session/%s/vocab.pkl" % session) as vocab_file:
        vocab = pickle.load(vocab_file)
        print("Loaded vocab with %i chars:" % len(vocab))
-       print(vocab.index_to_word)
+       #print(vocab.index_to_word)
 else:
     print("Using default 256-char vocab")
     # old-school
@@ -46,6 +48,11 @@ p = hyper_params["p"]
 lstm_size = hyper_params["lstm_size"]
 alpha = hyper_params["alpha"]
 dataset = hyper_params["dataset"]
+sp_model = str(hyper_params["sp_model"]) # error below if i don't cast to string...
+
+if sp_model:
+    sp = spm.SentencePieceProcessor()
+    sp.Load(sp_model)
 
 print("Loading session %s" % session)
 print("Trained using dataset %s" % session)
@@ -57,7 +64,7 @@ model.set_phase(train=False)
 
 start_word = n_classes
 
-n = 33 # an odd number, so there's one in the center!
+n = 11 # an odd number, so there's one in the center!
 
 encoder = model.layers[0].branches[0]
 sampler = encoder[-1]
@@ -97,11 +104,36 @@ t2 = time.time()
 print("Startup took %i seconds!" % (t2-t1))
 print("Ready for serving.")
 
-def to_inputs(sentence, vocab, max_len):
-    chars = [vocab.by_word(ch, oov_word="<unk>") for ch in sentence]
-    chars.append(vocab.by_word("<end>"))
-    for i in xrange(max_len - len(sentence) - 1):
-        chars.append(vocab.by_word("<pad>"))
+def to_inputs(sentence):
+    sentence = str(sentence) # ???
+    if sp:
+        #print(self.sp.EncodeAsPieces(sentence))
+        chars = sp.EncodeAsIds(sentence)
+    else:
+        chars = [vocab.by_word(ch, oov_word='<unk>') for ch in sentence]
+    print(chars)
+
+    pad = vocab.by_word("<pad>")
+    end = vocab.by_word("<end>")
+
+    s = []
+    for char in chars:
+        if char == end:
+            break
+        if char == pad:
+            break
+        s.append(vocab.by_index(char+2)) # OFFSET BUGGGGG omg omg omg
+
+    readout_str = ""
+    for c in s:
+        readout_str += c + " "
+    end
+
+    print(readout_str)
+
+    chars.append(vocab.by_word('<end>'))
+    for i in xrange(max_len - len(chars)):
+        chars.append(vocab.by_word('<pad>'))
     return numpy.asarray(chars)
 
 def render_results(w):
@@ -117,7 +149,7 @@ def render_results(w):
                 break
             if idx == pad:
                 break
-            s.append(vocab.by_index(idx))
+            s.append(vocab.by_index(idx+2)) # THIS IS SO GNARLY
         r = ''.join(s)
         print r.strip()
 
@@ -125,40 +157,20 @@ def render_results(w):
 
     return results
 
-def explore_dimension(s1, dim, n):
-    #s1 = "<unk> caller to a local radio station said cocaine"
-    #s2 = "giving up some of its gains as the dollar recovered"
-    s1 = to_inputs(s1, vocab, max_len)
-    encoder = model.layers[0].branches[0]
-    sampler = encoder[-1]
-    assert isinstance(sampler, Sampler)
-    ins = numpy.zeros((max_len, 1))
-    ins[:, 0] = s1
-    x = T.imatrix()
-    z = encoder(x)
-    mu = sampler.mu
-    f = theano.function([x], mu)
-    z = f(ins.astype('int32'))
-    s1_z = z[0]
-    print(numpy.amax(s1_z))
-    #n = 15
-    steps = numpy.linspace(0, 1, n)[:, None]
-    s1_z = numpy.repeat(s1_z[None, :], n, axis=0) # make a block of z coords
-    #steps = numpy.ones(s1_z.shape)
-    z_min = 0
-    z_max = 4
+# from: https://github.com/soumith/dcgan.torch/issues/14
+def slerp(val, low, high):
+    omega = numpy.arccos(numpy.clip(numpy.dot(low/numpy.linalg.norm(low), high/numpy.linalg.norm(high)), -1, 1))
+    so = numpy.sin(omega)
+    if so == 0:
+        return (1.0-val) * low + val * high # L'Hopital's rule/LERP
+    return numpy.sin((1.0-val)*omega) / so * low + numpy.sin(val*omega) / so * high
 
-    dimension_change = numpy.squeeze(numpy.linspace(z_min, z_max, n)[:, None])
+def lerp(val, low, high):
+    return (low + (high-low)*val)
 
-    s1_z[:, dim] = s1_z[:, dim] + dimension_change
-
-    return s1_z
-
-def interpolate(s1, s2, n):
-    #s1 = "<unk> caller to a local radio station said cocaine"
-    #s2 = "giving up some of its gains as the dollar recovered"
-    s1 = to_inputs(s1, vocab, max_len)
-    s2 = to_inputs(s2, vocab, max_len)
+def calc_interpolate(s1, s2, num_steps):
+    s1 = to_inputs(s1)
+    s2 = to_inputs(s2)
     encoder = model.layers[0].branches[0]
     sampler = encoder[-1]
     assert isinstance(sampler, Sampler)
@@ -173,16 +185,21 @@ def interpolate(s1, s2, n):
     s1_z = z[0]
     s2_z = z[1]
     #n = 15
-    s1_z = numpy.repeat(s1_z[None, :], n, axis=0)
-    s2_z = numpy.repeat(s2_z[None, :], n, axis=0)
-    steps = numpy.linspace(0, 1, n)[:, None]
-    sampled = s1_z * (1 - steps) + s2_z * steps
+    #s1_z = numpy.repeat(s1_z[None, :], n, axis=0)
+    #s2_z = numpy.repeat(s2_z[None, :], n, axis=0)
+    steps = numpy.linspace(0, 1, num_steps)[:, None]
+    #sampled = s1_z * (1 - steps) + s2_z * steps
+
+    sampled = numpy.zeros((num_steps, len(s1_z))) # len(s1_z) gives num of z-dims
+
+    # https://stackoverflow.com/questions/522563/accessing-the-index-in-python-for-loops
+    for index, step in enumerate(steps):
+        sampled[index] = slerp(step, s1_z, s2_z) # was slerp
+
     return sampled
 
-def get_z(s1):
-    t1 = time.time()
-
-    s1 = to_inputs(s1, vocab, max_len)
+def calc_jitter(s1):
+    s1 = to_inputs(s1)
     encoder = model.layers[0].branches[0]
     sampler = encoder[-1]
     assert isinstance(sampler, Sampler)
@@ -190,87 +207,57 @@ def get_z(s1):
     ins[:, 0] = s1
     x = T.imatrix()
     z = encoder(x)
-
     mu = sampler.mu
     f = theano.function([x], mu)
-    s1_z = f(ins.astype('int32'))
+    z = f(ins.astype('int32'))
+    s1_z = z[0]
 
-    w = f(s1_z.astype(theano.config.floatX))
+    s1_z_n = numpy.repeat(s1_z[None, :], n, axis=0)
 
-    rendered = render_results(w)
+    jitter_scale = 0.2
+    # MAKE NEGATIVE TOO
+    jitter_vals = (numpy.random.rand(num_steps, len(s1_z)) - 0.5) * 2.0 * jitter_scale
+    sampled = s1_z_n + jitter_vals
 
-    t2 = time.time()
-    print("get_z took %f secs" % (t2-t1) )
+    return sampled
 
-    return s1_z.tolist(), rendered
+def calc_get_z(s1):
+    s1 = to_inputs(s1, vocab, max_len)
 
-def serve_interpolation(s1, s2):
-    w = f(interpolate(s1,s2,n).astype(theano.config.floatX))
+    encoder = model.layers[0].branches[0]
+    sampler = encoder[-1]
+    assert isinstance(sampler, Sampler)
+    ins = numpy.zeros((max_len, 1))
+    ins[:, 0] = s1
+
+    x = T.imatrix()
+    z = encoder(x)
+
+    mu = sampler.mu
+
+    f = theano.function([x], mu)
+    z = f(ins.astype('int32'))
+    s1_z = z[0]
+
+    return s1_z
+
+def serve_interpolate(s1, s2):
+    w = f(calc_interpolate(s1, s2, n).astype(theano.config.floatX))
     return render_results(w)
 
-def serve_mod(z, dim, magnitude):
-    t1 = time.time()
-
-    s1_z = numpy.array(z).astype(theano.config.floatX)
-    s1_z = numpy.repeat(s1_z[None, :], n, axis=0)
-
-    half_n_floor = int(math.floor(n/2))
-    mod_eps = 0.1
-    neg_steps = numpy.linspace(-magnitude, -mod_eps, half_n_floor)
-    pos_steps = numpy.linspace(mod_eps, magnitude, half_n_floor)
-
-    steps = numpy.zeros(n)
-    # this is all a bit awkward...
-    steps[0:half_n_floor] = neg_steps
-    steps[half_n_floor+1] = 0.0
-    steps[-half_n_floor:] = pos_steps
-
-    offset = 8
-    steps = numpy.repeat(steps[None, :], offset, axis=0)
-    steps = numpy.rollaxis(steps, 1) # !!!???
-    print(steps.shape)
-
-    s1_z[:, (dim*offset):(dim*offset)+offset] += steps
-
-    w = f(s1_z.astype(theano.config.floatX))
-
-    t2 = time.time()
-    print("serve_mod f took %f secs" % (t2-t1) )
-
-    t1 = time.time()
-    res = render_results(w)
-
-    t2 = time.time()
-    print("print took %f secs" % (t2-t1) )
-
-    return s1_z.tolist(), res
-
-def serve_toward_target(z, target_z, magnitude):
-    t1 = time.time()
-
-    s1_z = numpy.array(z).astype(theano.config.floatX)
-    s2_z = numpy.array(target_z).astype(theano.config.floatX)
-
-    s1_z = numpy.repeat(s1_z[None, :], n, axis=0)
-    s2_z = numpy.repeat(s2_z[None, :], n, axis=0)
-
-    steps = numpy.linspace(0.0, 1.0, n)[:, None]
-    #jitter = numpy.random.random_sample(steps.shape) * steps
-
-    interpolated_z = s1_z * (1 - steps) + s2_z * (steps)
-
-    w = f(interpolated_z.astype(theano.config.floatX))
-
-    t2 = time.time()
-    print("serve_toward_target took %f secs" % (t2-t1) )
-
-    rendered = render_results(w)
-
-    return interpolated_z.tolist(), rendered
+def serve_jitter(s1):
+    w = f(calc_jitter(s1).astype(theano.config.floatX))
+    return render_results(w)
 
 def serve_get_z(s1):
-    z, text = get_z(s1)
-    return z, text
+    s1_z = calc_get_z(s1)
+    multi_z = numpy.repeat(s1_z[None, :], n, axis=0)
+    w = f(multi_z.astype(theano.config.floatX))
+    rendered = render_results(w)[0]
+    return s1_z.tolist(), rendered
+
+#serve_interpolation("I love you.", "She saw the sun rising and knew that it was a bad sign for the future of the planet.")
+#quit()
 
 from flask import Flask
 from flask import request
@@ -278,41 +265,30 @@ from flask import jsonify
 
 app = Flask(__name__)
 
-@app.route('/textserve_interpolate', methods=['GET'])
-def textserve():
+@app.route('/interpolate', methods=['GET'])
+def interpolate():
     s1 = request.args.get('s1')
     s2 = request.args.get('s2')
+    print("Interpolating:")
     print(s1)
     print(s2)
-    results = serve(s1, s2)
-    return ''.join(results)
+    results = serve_interpolate(s1, s2)
+    return jsonify({"results": results})
 
-@app.route('/textserve_jitter', methods=['GET'])
-def textserve_jitter():
+@app.route('/jitter', methods=['GET'])
+def jitter():
     s1 = request.args.get('s1')
+    print("Jittering")
     print(s1)
     results = serve_jitter(s1)
-    return ''.join(results)
+    return jsonify({"results": results})
 
-@app.route('/textserve_get_z', methods=['POST'])
-def textserve_get_z():
+@app.route('/get_z', methods=['POST'])
+def get_z():
     json = request.get_json()
     z, text = serve_get_z(json["s1"])
     return jsonify({"z": z, "text": text})
 
-@app.route('/textserve_mod', methods=['POST'])
-def textserve_mod():
-    json = request.get_json()
-    z, text = serve_mod(json["z"], json["dim"], json["magnitude"])
-    return jsonify({"z": z, "text": text})
-
-@app.route('/textserve_target', methods=['POST'])
-def textserve_target():
-    json = request.get_json()
-    new_z, new_text = serve_toward_target(json["z"], json["target_z"], json["magnitude"])
-    return jsonify({"z": new_z, "text": new_text})
-
-"""
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     #parser.add_argument('-z', default=100, type=int)
@@ -320,8 +296,8 @@ if __name__ == '__main__':
     #parser.add_argument('-alpha', default=0.2, type=float)
     #parser.add_argument('-sample_size', default=128, type=int)
     #parser.add_argument('-lstm_size', default=1000, type=int)
-    parser.add_argument('-session', type=str)
+    #parser.add_argument('-session', type=str)
     args = parser.parse_args()
     main(**vars(args))
-"""
+
 

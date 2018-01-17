@@ -5,23 +5,37 @@ import os
 import time
 from nn.utils import Vocabulary
 
+import sentencepiece as spm # https://github.com/google/sentencepiece/tree/ma$
+
 class TextProjectReconstructionDatabase(object):
 
-    def __init__(self, dataset, phase, batch_size, max_len=140, pad=True):
+    def __init__(self, dataset, phase, batch_size, max_len=140, pad=True, sp_model=None):
         self.phase = phase
         self.batch_size = batch_size
         self.max_len = max_len
 
         self.vocab = Vocabulary()
-        self.vocab.add('<pad>')
-        self.vocab.add('<unk>')
-        self.vocab.add('<end>')
 
-        # USED TO BE xrange(256) -- but that's too many!
+        if sp_model:
+            self.sp = spm.SentencePieceProcessor()
+            self.sp.Load(sp_model)
+            sp_model_size = self.sp.GetPieceSize()
+            print("Loaded SP model with", sp_model_size, "pieces")
+            self.vocab.add('<pad>')
+            self.vocab.add('<unk>')
+            self.vocab.add('<end>')
 
-        for i in xrange(32, 128):
-            ch = chr(i)
-            self.vocab.add(ch)
+            for i in xrange(sp_model_size):
+                self.vocab.add(self.sp.IdToPiece(i))
+
+        else:
+            self.vocab.add('<pad>')
+            self.vocab.add('<unk>')
+            self.vocab.add('<end>')
+            for i in xrange(32, 128):
+                ch = chr(i)
+                self.vocab.add(ch)
+
         self.n_classes = len(self.vocab)
         self.pad = pad
 
@@ -93,9 +107,14 @@ class TextProjectReconstructionDatabase(object):
         print "took %f seconds" % (time.time() - t)
 
     def to_inputs(self, sentence):
-        chars = [self.vocab.by_word(ch, oov_word='<unk>') for ch in sentence]
+        #print(sentence)
+        if self.sp:
+            #print(self.sp.EncodeAsPieces(sentence))
+            chars = self.sp.EncodeAsIds(sentence)
+        else:
+            chars = [self.vocab.by_word(ch, oov_word='<unk>') for ch in sentence]
         chars.append(self.vocab.by_word('<end>'))
-        for i in xrange(self.max_len - len(sentence) - 1):
+        for i in xrange(self.max_len - len(chars)):
             chars.append(self.vocab.by_word('<pad>'))
         return numpy.asarray(chars)
 
