@@ -5,3 +5,4 @@ training_scripts/*
 
 session/*
 !session/big1/
+!session/sample_session/
