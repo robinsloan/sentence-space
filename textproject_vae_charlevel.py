@@ -100,9 +100,7 @@ def make_model(z, sample_size, dropword_p, n_classes, lstm_size, alpha):
 
     return model
 
-def main(z, lr, anneal_start, anneal_end, p, alpha, lstm_size, num_epochs, max_len, batch_size, session, dataset, resume):
-
-    sp_model = "/home/robin/dev/water-margin/sp/sf256.model"
+def main(z, lr, anneal_start, anneal_end, p, alpha, lstm_size, num_epochs, max_len, batch_size, session, dataset, sp_model, resume):
 
     train_db = TextProjectReconstructionDatabase(dataset=dataset, phase="train", batch_size=batch_size, max_len=max_len, sp_model=sp_model or None)
     valid_db = TextProjectReconstructionDatabase(dataset=dataset, phase="valid", batch_size=batch_size, max_len=max_len, sp_model=sp_model or None)
@@ -113,8 +111,7 @@ def main(z, lr, anneal_start, anneal_end, p, alpha, lstm_size, num_epochs, max_l
 
     vocab = train_db.vocab
 
-    print(len(vocab))
-    print(vocab)
+    print("Using vocab with %s tokens" % len(vocab))
 
     if resume:
         model.load("session/%s/model.flt" % session)
@@ -126,8 +123,6 @@ def main(z, lr, anneal_start, anneal_end, p, alpha, lstm_size, num_epochs, max_l
 
     print("Total params: %s" % model.total_params)
 
-    # "textproject-charlevel-z_%d-len_%d-p_%.2f-lstmsz_%d-alpha_%.2f" % (z, sample_size, p, lstm_size, alpha)
-
     opt = Optimizer(model, train_db, valid_db, Adam(lr),
                     name=session, print_info=True, restore=resume)
 
@@ -135,7 +130,6 @@ def main(z, lr, anneal_start, anneal_end, p, alpha, lstm_size, num_epochs, max_l
         pickle.dump(train_db.vocab, vocab_file)
 
     nn.utils.save_json("%s/hyper_params.json" % opt.opt_folder, {
-        # z, sample_size, p, n_classes, lstm_size, alpha
         "z": z,
         "max_len": max_len,
         "p": p,
@@ -165,6 +159,8 @@ if __name__ == '__main__':
     parser.add_argument('-batch_size', default=32, type=int)
     parser.add_argument('-session', type=str)
     parser.add_argument('-dataset', type=str)
+    parser.add_argument('-sp_model', default=None, type=str) # "sp_models/sf256.model"
+
     parser.add_argument('-resume', default=False, type=bool)
     args = parser.parse_args()
     main(**vars(args))

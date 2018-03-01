@@ -8,8 +8,9 @@ end
 sentence_origin = CGI.escape(ARGV[0])
 sentence_dest = CGI.escape(ARGV[1])
 
-resp = `curl "http://0.0.0.0:5000/interpolate?s1=#{sentence_origin}&s2=#{sentence_dest}"`
+resp = `curl "http://0.0.0.0/sentencespace/gradient?s1=#{sentence_origin}&s2=#{sentence_dest}"`
+#resp = `curl "http://0.0.0.0:8081/jitter?s1=#{sentence_origin}&mag=0.2"`
 
-puts resp.gsub(/\\u2581/," ")
+puts resp
 
 puts "Done!"

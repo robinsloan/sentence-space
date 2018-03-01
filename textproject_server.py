@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 import json, sys, os, pickle, time, math
 import argparse
 import numpy
@@ -15,11 +18,12 @@ from lm_vae import Sampler
 from lm_vae_sample import LNLSTMStep
 from textproject_vae_charlevel import make_model
 
-import sentencepiece as spm # https://github.com/google/sentencepiece/tree/ma$
+from wordfilter import Wordfilter
+wordfilter = Wordfilter()
 
 t1 = time.time()
 
-session = "sp11_trial"
+session = "sp15_trial"
 
 vocab = Vocabulary()
 
@@ -48,9 +52,10 @@ p = hyper_params["p"]
 lstm_size = hyper_params["lstm_size"]
 alpha = hyper_params["alpha"]
 dataset = hyper_params["dataset"]
-sp_model = str(hyper_params["sp_model"]) # error below if i don't cast to string...
+sp_model = str(hyper_params["sp_model"]) # I get an error below if i don't cast to string...
 
 if sp_model:
+    import sentencepiece as spm # https://github.com/google/sentencepiece
     sp = spm.SentencePieceProcessor()
     sp.Load(sp_model)
 
@@ -64,7 +69,7 @@ model.set_phase(train=False)
 
 start_word = n_classes
 
-n = 11 # an odd number, so there's one in the center!
+n = 7 # an odd number, so there's one in the center!
 
 encoder = model.layers[0].branches[0]
 sampler = encoder[-1]
@@ -194,11 +199,11 @@ def calc_interpolate(s1, s2, num_steps):
 
     # https://stackoverflow.com/questions/522563/accessing-the-index-in-python-for-loops
     for index, step in enumerate(steps):
-        sampled[index] = slerp(step, s1_z, s2_z) # was slerp
+        sampled[index] = lerp(step, s1_z, s2_z)
 
     return sampled
 
-def calc_jitter(s1):
+def calc_jitter(s1, mag):
     s1 = to_inputs(s1)
     encoder = model.layers[0].branches[0]
     sampler = encoder[-1]
@@ -214,27 +219,23 @@ def calc_jitter(s1):
 
     s1_z_n = numpy.repeat(s1_z[None, :], n, axis=0)
 
-    jitter_scale = 0.2
+    jitter_scale = float(mag) # 0.2
     # MAKE NEGATIVE TOO
-    jitter_vals = (numpy.random.rand(num_steps, len(s1_z)) - 0.5) * 2.0 * jitter_scale
+    jitter_vals = (numpy.random.rand(n, len(s1_z)) - 0.5) * 2.0 * jitter_scale
     sampled = s1_z_n + jitter_vals
 
     return sampled
 
 def calc_get_z(s1):
-    s1 = to_inputs(s1, vocab, max_len)
-
+    s1 = to_inputs(s1)
     encoder = model.layers[0].branches[0]
     sampler = encoder[-1]
     assert isinstance(sampler, Sampler)
     ins = numpy.zeros((max_len, 1))
     ins[:, 0] = s1
-
     x = T.imatrix()
     z = encoder(x)
-
     mu = sampler.mu
-
     f = theano.function([x], mu)
     z = f(ins.astype('int32'))
     s1_z = z[0]
@@ -245,8 +246,8 @@ def serve_interpolate(s1, s2):
     w = f(calc_interpolate(s1, s2, n).astype(theano.config.floatX))
     return render_results(w)
 
-def serve_jitter(s1):
-    w = f(calc_jitter(s1).astype(theano.config.floatX))
+def serve_jitter(s1, mag):
+    w = f(calc_jitter(s1, float(mag)).astype(theano.config.floatX))
     return render_results(w)
 
 def serve_get_z(s1):
@@ -255,6 +256,24 @@ def serve_get_z(s1):
     w = f(multi_z.astype(theano.config.floatX))
     rendered = render_results(w)[0]
     return s1_z.tolist(), rendered
+
+def screen_results(results):
+    screened_results = list(results)
+      
+    for i in xrange(len(results)):
+      if wordfilter.blacklisted(results[i]):
+        screened_results[i] = "***"
+    
+    return screened_results
+
+def process_results(results):
+    print("Processing results")
+    processed_results = list(results)
+
+    for i in xrange(len(results)):
+      processed_results[i] = results[i].decode('utf-8').replace(u"\u2581"," ")[1:]
+
+    return processed_results
 
 #serve_interpolation("I love you.", "She saw the sun rising and knew that it was a bad sign for the future of the planet.")
 #quit()
@@ -265,28 +284,35 @@ from flask import jsonify
 
 app = Flask(__name__)
 
-@app.route('/interpolate', methods=['GET'])
-def interpolate():
-    s1 = request.args.get('s1')
-    s2 = request.args.get('s2')
+@app.route('/gradient', methods=['GET'])
+def gradient():
+    s1 = request.args.get('s1')[0:max_len]
+    s2 = request.args.get('s2')[0:max_len]
     print("Interpolating:")
     print(s1)
     print(s2)
     results = serve_interpolate(s1, s2)
+    results = process_results(results)
+    results = screen_results(results)
     return jsonify({"results": results})
 
 @app.route('/jitter', methods=['GET'])
 def jitter():
-    s1 = request.args.get('s1')
-    print("Jittering")
+    s1 = request.args.get('s1')[0:max_len]
+    mag = request.args.get('mag') or 0.1
+    print("Jittering:")
     print(s1)
-    results = serve_jitter(s1)
+    results = serve_jitter(s1, mag)
+    results = process_results(results)
+    results = screen_results(results)
     return jsonify({"results": results})
 
-@app.route('/get_z', methods=['POST'])
+@app.route('/get_z', methods=['GET'])
 def get_z():
-    json = request.get_json()
-    z, text = serve_get_z(json["s1"])
+    #json = request.get_json()
+    s1 = request.args.get('s1')
+    print(s1)
+    z, text = serve_get_z(s1)
     return jsonify({"z": z, "text": text})
 
 if __name__ == '__main__':

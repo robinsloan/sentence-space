@@ -5,7 +5,6 @@ import os
 import time
 from nn.utils import Vocabulary
 
-import sentencepiece as spm # https://github.com/google/sentencepiece/tree/ma$
 
 class TextProjectReconstructionDatabase(object):
 
@@ -17,10 +16,12 @@ class TextProjectReconstructionDatabase(object):
         self.vocab = Vocabulary()
 
         if sp_model:
+            import sentencepiece as spm # https://github.com/google/sentencepiece
+
             self.sp = spm.SentencePieceProcessor()
             self.sp.Load(sp_model)
             sp_model_size = self.sp.GetPieceSize()
-            print("Loaded SP model with", sp_model_size, "pieces")
+            print("Loaded SP model with", sp_model_size, "tokens")
             self.vocab.add('<pad>')
             self.vocab.add('<unk>')
             self.vocab.add('<end>')
@@ -29,6 +30,8 @@ class TextProjectReconstructionDatabase(object):
                 self.vocab.add(self.sp.IdToPiece(i))
 
         else:
+            print("Using default fixed vocab")
+
             self.vocab.add('<pad>')
             self.vocab.add('<unk>')
             self.vocab.add('<end>')
@@ -85,16 +88,15 @@ class TextProjectReconstructionDatabase(object):
         self.index = T.iscalar()
 
     def shuffle_and_make_batches(self):
+        # this all might be horribly inefficient but whatever
         t = time.time()
         print("Shuffling %s sentences..." % len(self.sentences))
         batch_source = self.sentences[:]
         numpy.random.shuffle(batch_source)
-
-        print "took %f seconds" % (time.time() - t)
+        print "...done. Took %s seconds" % round(time.time() - t)
 
         t = time.time()
         print("Making %s batches..." % self.batches_per_epoch)
-
         self.batches = [None] * self.batches_per_epoch # sneaky
         for i in xrange(self.batches_per_epoch):
             self.batches[i] = numpy.zeros((self.max_len, self.batch_size))
@@ -104,7 +106,7 @@ class TextProjectReconstructionDatabase(object):
                 self.batches[i][:, j] = self.to_inputs(batch_source.pop())
                 self.batches[i] = self.batches[i].astype('int32')
                 # there's probably some more efficient way to do that...
-        print "took %f seconds" % (time.time() - t)
+        print "...done. Took %s minutes." % round((time.time() - t)/60)
 
     def to_inputs(self, sentence):
         #print(sentence)
@@ -118,7 +120,7 @@ class TextProjectReconstructionDatabase(object):
             chars.append(self.vocab.by_word('<pad>'))
         return numpy.asarray(chars)
 
-    # The original code drew random samples but didn't keep track of which had already been drawn. This seems not ideal to me so I am rewriting.
+    # The original code drew random samples but didn't keep track of which had already been drawn. This seems not ideal to me so I am rewriting to make minibatches draw samples *without* replacement.
 
     def make_batch(self):
         batch = numpy.zeros((self.max_len, self.batch_size))
