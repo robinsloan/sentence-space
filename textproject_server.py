@@ -296,11 +296,11 @@ def gradient():
     results = screen_results(results)
     return jsonify({"results": results})
 
-@app.route('/jitter', methods=['GET'])
+@app.route('/neighborhood', methods=['GET'])
 def jitter():
     s1 = request.args.get('s1')[0:max_len]
     mag = request.args.get('mag') or 0.1
-    print("Jittering:")
+    print("Exploring neighborhood around:")
     print(s1)
     results = serve_jitter(s1, mag)
     results = process_results(results)
