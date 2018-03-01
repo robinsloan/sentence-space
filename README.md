@@ -19,10 +19,10 @@ Requirements include:
 
 * Python 2.7
 * Theano and its dependencies, including Numpy
-* `[sentencepiece](https://github.com/google/sentencepiece)` (if you want to use the included, pretrained model)
-* `[wordfilter](https://github.com/dariusk/wordfilter)`
+* [`sentencepiece`](https://github.com/google/sentencepiece) (if you want to use the included, pretrained model)
+* [`wordfilter`](https://github.com/dariusk/wordfilter)
 
-This project is forked from `[stas-semeniuta/textvae](https://github.com/stas-semeniuta/textvae)`, which is the code for the paper ["A Hybrid Convolutional Variational Autoencoder for Text Generation"](https://arxiv.org/abs/1702.02390) by Stanislau Semeniuta, Aliaksei Severyn, and Erhardt Barth. I'm indebted to Semeniuta, et. al., for their skill and generosity. If I have tinkered slightly, it is because I stood on the shoulders of smart people.
+This project is forked from [`stas-semeniuta/textvae`](https://github.com/stas-semeniuta/textvae)`, which is the code for the paper ["A Hybrid Convolutional Variational Autoencoder for Text Generation"](https://arxiv.org/abs/1702.02390) by Stanislau Semeniuta, Aliaksei Severyn, and Erhardt Barth. I'm indebted to Semeniuta, et. al., for their skill and generosity. If I have tinkered slightly, it is because I stood on the shoulders of smart people.
 
 I'm indebted also to [`@richardassar`](https://github.com/richardassar), whose improvements allow this server to provide results at interactive speeds.
 
