@@ -22,7 +22,16 @@ Requirements include:
 * [`sentencepiece`](https://github.com/google/sentencepiece) (if you want to use the included, pretrained model)
 * [`wordfilter`](https://github.com/dariusk/wordfilter)
 
-This project is forked from [`stas-semeniuta/textvae`](https://github.com/stas-semeniuta/textvae)`, which is the code for the paper ["A Hybrid Convolutional Variational Autoencoder for Text Generation"](https://arxiv.org/abs/1702.02390) by Stanislau Semeniuta, Aliaksei Severyn, and Erhardt Barth. I'm indebted to Semeniuta, et. al., for their skill and generosity. If I have tinkered slightly, it is because I stood on the shoulders of smart people.
+If you have all those requirements, it _should_ be possible to just run `bash serve.sh` and get a server running. If that's not the case, open an issue and let me know. I definitely want to streamline this over time.
+
+Once the server is running, the API is pretty simple:
+
+* `/gradient?s1=Your%20first%20sentence&s2=Your%20second%20sentence`
+* `/jitter?s1=Your%20sentence&mag=0.2`
+
+Both endpoints return a JSON array of results. The code is currently configured to provide seven sentences in each gradient or jitter, but you could make that three or 128.
+
+This project is forked from [`stas-semeniuta/textvae`](https://github.com/stas-semeniuta/textvae), which is the code for the paper ["A Hybrid Convolutional Variational Autoencoder for Text Generation"](https://arxiv.org/abs/1702.02390) by Stanislau Semeniuta, Aliaksei Severyn, and Erhardt Barth. I'm indebted to Semeniuta, et. al., for their skill and generosity. If I have tinkered slightly, it is because I stood on the shoulders of smart people.
 
 I'm indebted also to [`@richardassar`](https://github.com/richardassar), whose improvements allow this server to provide results at interactive speeds.
 
