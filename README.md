@@ -7,13 +7,13 @@ This is a server designed to provide a couple of interesting artifacts. The core
 Once you've established this continuous sentence space, what can you get from it?
 
 1. *Sentence gradients*: smooth interpolations between two input sentences.
-2. *Sentence neighborhoods*: clouds of alternative sentences closely related to an input sentence.
+2. *Sentence jitters*: clouds of alternative sentences closely related to an input sentence.
 
 These are very weird artifacts! If you try to write a sentence gradient by hand, you'll find it's very difficult. Is it useful? Possibly not. Is it _interesting_? Definitely!
 
 Again, you'll find a ton more context and exploration in [this post](https://www.robinsloan.com/voyages-in-sentence-space).
 
-This code isn't quite turnkey, but if you're willing to tinker a little, you should be able to get up and running, training your own models and serving your own gradients, jitters, and who-knows-what-else.
+This code isn't quite turnkey, but if you're willing to tinker, you should be able to get up and running, training your own models and serving your own gradients, jitters, and who-knows-what-else.
 
 Requirements include:
 
@@ -22,12 +22,12 @@ Requirements include:
 * [`sentencepiece`](https://github.com/google/sentencepiece) (if you want to use the included, pretrained model)
 * [`wordfilter`](https://github.com/dariusk/wordfilter)
 
-If you have all those requirements, it _should_ be possible to just run `bash serve.sh` and get a server running. If that's not the case, open an issue and let me know. I definitely want to streamline this over time.
+If you have those requirements installed, it _should_ be possible to just run `bash serve.sh` and get a server running. If that's not the case, open an issue and let me know. I definitely want to streamline this over time, and improve this documentation as well.
 
-Once the server is running, the API is pretty simple:
+Once the server is running, the API is simple:
 
 * `/gradient?s1=Your%20first%20sentence&s2=Your%20second%20sentence`
-* `/neighborhood?s1=Your%20sentence&mag=0.2`
+* `/jitter?s1=Your%20sentence&mag=0.2`
 
 Both endpoints return a JSON array of results. The code is currently configured to provide seven sentences in each gradient or jitter, but you could make that three or 128.
 
