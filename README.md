@@ -9,7 +9,7 @@ Once you've established this continuous sentence space, what can you get from it
 1. *Sentence gradients*: smooth interpolations between two input sentences.
 2. *Sentence jitters*: clouds of alternative sentences closely related to an input sentence.
 
-These are very weird artifacts! If you try to write a sentence gradient by hand, you'll find it's very difficult. Are they useful? Possibly not. Are they _interesting_? Definitely!
+These are very weird artifacts! If you try to write a sentence gradient by hand, you'll find it's very difficult. Is it useful? Possibly not. Is it _interesting_? Definitely!
 
 Again, you'll find a ton more context and exploration in [this post](https://www.robinsloan.com/voyages-in-sentence-space).
 
