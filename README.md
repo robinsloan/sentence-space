@@ -1,6 +1,6 @@
 # Welcome to sentence space
 
-You can find an introduction to this project, with examples and live demos, [here](https://www.robinsloan.com/voyages-in-sentence-space).
+You can find an introduction to this project, with interactive demos, [here](https://www.robinsloan.com/voyages-in-sentence-space).
 
 This is a server designed to provide a couple of interesting artifacts. The core of it is a variational autoencoder that embeds sentences into a continuous space; as a result, you can select a point anywhere in that space and get a (more or less) coherent sentence back.
 
@@ -13,12 +13,13 @@ These are very weird artifacts! If you try to write a sentence gradient by hand,
 
 Again, you'll find a ton more context and exploration in [this post](https://www.robinsloan.com/voyages-in-sentence-space).
 
-This code isn't quite turnkey, but if you're willing to tinker, you should be able to get up and running, training your own models and serving your own gradients, jitters, and who-knows-what-else.
+This code isn't quite turnkey, but if you're willing to tinker, you should be able to get up and running, training your own models and serving your own gradients, neighborhoods, and who-knows-what-else.
 
 Requirements include:
 
 * Python 2.7
 * Theano and its dependencies, including Numpy
+* Flask
 * [`sentencepiece`](https://github.com/google/sentencepiece) (if you want to use the included, pretrained model)
 * [`wordfilter`](https://github.com/dariusk/wordfilter)
 
@@ -29,7 +30,7 @@ Once the server is running, the API is simple:
 * `/gradient?s1=Your%20first%20sentence&s2=Your%20second%20sentence`
 * `/neighborhood?s1=Your%20sentence&mag=0.2`
 
-Both endpoints return a JSON array of results. The code is currently configured to provide seven sentences in each gradient or jitter, but you could make that three or 128.
+Both endpoints return a JSON array of results. The code is currently configured to provide seven sentences in each gradient or neighborhood, but you could make that three or 128.
 
 This project is forked from [`stas-semeniuta/textvae`](https://github.com/stas-semeniuta/textvae), which is the code for the paper ["A Hybrid Convolutional Variational Autoencoder for Text Generation"](https://arxiv.org/abs/1702.02390) by Stanislau Semeniuta, Aliaksei Severyn, and Erhardt Barth. I'm indebted to Semeniuta, et. al., for their skill and generosity. If I have tinkered slightly, it is because I stood on the shoulders of smart people.
 
