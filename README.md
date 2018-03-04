@@ -13,17 +13,37 @@ These are very weird artifacts! If you try to write a sentence gradient by hand,
 
 Again, you'll find a ton more context and exploration in [this post](https://www.robinsloan.com/voyages-in-sentence-space).
 
-This code isn't quite turnkey, but if you're willing to tinker, you should be able to get up and running, training your own models and serving your own gradients, neighborhoods, and who-knows-what-else.
+## Running the server
 
-Requirements include:
+This code isn't quite turnkey, but if you're willing to tinker, you should be able to train your own models and serve your own gradients, neighborhoods, and who-knows-what-else.
+
+The requirements are:
 
 * Python 2.7
-* Theano and its dependencies, including Numpy
 * Flask
+* Numpy 1.12.1
+* Theano 0.9 (plus Nvidia's CUDA and cudnn)
+* Pandas 0.20.1
+* Matplotlib 2.0.2
 * [`sentencepiece`](https://github.com/google/sentencepiece) (if you want to use the included, pretrained model)
 * [`wordfilter`](https://github.com/dariusk/wordfilter)
 
-If you have those requirements installed, it _should_ be possible to just run `bash serve.sh` and get a server running. If that's not the case, open an issue and let me know. I definitely want to streamline this over time, and improve this documentation as well.
+One way to get started would be to use Anaconda:
+
+```
+conda create -n sentence-space python=2.7
+source activate sentence-space
+conda install flask
+conda install numpy=1.12.1
+conda install theano=0.9.0
+conda install pandas=0.20.1
+conda install matplotlib=2.0.2
+
+pip install wordfilter
+pip install sentencepiece
+```
+
+If you have those requirements installed, as well as CUDA and cudnn (which is A Whole Other Thing), it _should_ be possible to run `bash serve.sh` and get a server running. If that's not the case, open an issue and let me know. I definitely want to streamline this over time, and improve this documentation as well.
 
 Once the server is running, the API is simple:
 
@@ -31,6 +51,8 @@ Once the server is running, the API is simple:
 * `/neighborhood?s1=Your%20sentence&mag=0.2`
 
 Both endpoints return a JSON array of results. The code is currently configured to provide seven sentences in each gradient or neighborhood, but you could make that three or 128.
+
+## Contributors
 
 This project is forked from [`stas-semeniuta/textvae`](https://github.com/stas-semeniuta/textvae), which is the code for the paper ["A Hybrid Convolutional Variational Autoencoder for Text Generation"](https://arxiv.org/abs/1702.02390) by Stanislau Semeniuta, Aliaksei Severyn, and Erhardt Barth. I'm indebted to Semeniuta, et. al., for their skill and generosity. If I have tinkered slightly, it is because I stood on the shoulders of smart people.
 
