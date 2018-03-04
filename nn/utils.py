@@ -155,7 +155,7 @@ def update_vars_as_dict(param_updates):
     v = {}
     for var in param_updates.vars:
         if var.name in v:
-            raise Exception("%s is not a unique name" % v.name)
+            raise Exception("%s is not a unique name" % var.name)
         v[var.name] = var.get_value()
 
     return v
