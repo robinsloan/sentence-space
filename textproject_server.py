@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import json, sys, os, pickle, time, math
-import argparse
+
 import numpy
 import theano
 import theano.tensor as T
@@ -21,9 +21,64 @@ from textproject_vae_charlevel import make_model
 from wordfilter import Wordfilter
 wordfilter = Wordfilter()
 
-t1 = time.time()
+### specify your session ###
 
 session = "sp15_trial"
+
+### good work ###
+
+# Flask
+
+from flask import Flask
+from flask import request
+from flask import jsonify
+
+app = Flask(__name__)
+
+def api_sanitize(s):
+    san = s.replace('"','')
+    san = san.replace(u'\u201c', '').replace(u'\u201d', '')
+    return san
+
+def sanitize_mag(m):
+    return m
+
+@app.route('/gradient', methods=['GET'])
+def gradient():
+    s1 = api_sanitize(request.args.get('s1')[0:max_len])
+    s2 = api_sanitize(request.args.get('s2')[0:max_len])
+    print("Interpolating:")
+    print(s1)
+    print(s2)
+    results = serve_interpolate(s1, s2)
+    results = process_results(results)
+    results = screen_results(results)
+    return jsonify({"results": results})
+
+@app.route('/neighborhood', methods=['GET'])
+def jitter():
+    s1 = api_sanitize(request.args.get('s1')[0:max_len])
+    mag = request.args.get('mag') or 0.1
+    print("Exploring neighborhood around:")
+    print(s1)
+    results = serve_jitter(s1, mag)
+    results = process_results(results)
+    results = screen_results(results)
+    return jsonify({"results": results})
+
+@app.route('/get_z', methods=['GET'])
+def get_z():
+    #json = request.get_json()
+    s1 = request.args.get('s1')
+    print(s1)
+    z, text = serve_get_z(s1)
+    return jsonify({"z": z, "text": text})
+
+# The actual work
+
+t1 = time.time()
+
+print("It begins")
 
 vocab = Vocabulary()
 
@@ -31,14 +86,15 @@ if os.path.exists("session/%s/vocab.pkl" % session):
     with open("session/%s/vocab.pkl" % session) as vocab_file:
        vocab = pickle.load(vocab_file)
        print("Loaded vocab with %i chars:" % len(vocab))
-       #print(vocab.index_to_word)
+       print(vocab.index_to_word)
 else:
     print("Using default 256-char vocab")
-    # old-school
-    vocab.add("<pad>")
-    vocab.add("<unk>")
-    vocab.add("<end>")
-    for i in xrange(256):
+    # Should probably extract this into a little shared module with textproject_reconstruction_database
+    # Maybe later
+    vocab.add('<pad>')
+    vocab.add('<unk>')
+    vocab.add('<end>')
+    for i in xrange(32, 128):
         ch = chr(i)
         vocab.add(ch)
 
@@ -54,10 +110,14 @@ alpha = hyper_params["alpha"]
 dataset = hyper_params["dataset"]
 sp_model = str(hyper_params["sp_model"]) # I get an error below if i don't cast to string...
 
-if sp_model:
+using_sp = (sp_model != None) and (len(sp_model) > 0) and (sp_model != "None")
+if using_sp:
+    print("Using sentencepiece")
     import sentencepiece as spm # https://github.com/google/sentencepiece
     sp = spm.SentencePieceProcessor()
     sp.Load(sp_model)
+else:
+    print("Not using sentencepiece")
 
 print("Loading session %s" % session)
 print("Trained using dataset %s" % session)
@@ -111,11 +171,11 @@ print("Ready for serving.")
 
 def to_inputs(sentence):
     sentence = str(sentence) # ???
-    if sp:
+    if using_sp:
         #print(self.sp.EncodeAsPieces(sentence))
         chars = sp.EncodeAsIds(sentence)
     else:
-        chars = [vocab.by_word(ch, oov_word='<unk>') for ch in sentence]
+        chars = [vocab.by_word(ch, oov_word="<unk>") for ch in sentence]
     print(chars)
 
     pad = vocab.by_word("<pad>")
@@ -127,8 +187,11 @@ def to_inputs(sentence):
             break
         if char == pad:
             break
-        s.append(vocab.by_index(char+2)) # OFFSET BUGGGGG omg omg omg
-
+        if using_sp:
+          s.append(vocab.by_index(char+2)) # OFFSET BUGGGGG omg omg omg
+        else:
+          s.append(vocab.by_index(char)) # OFFSET BUGGGGG omg omg omg
+        
     readout_str = ""
     for c in s:
         readout_str += c + " "
@@ -154,7 +217,10 @@ def render_results(w):
                 break
             if idx == pad:
                 break
-            s.append(vocab.by_index(idx+2)) # THIS IS SO GNARLY
+            if using_sp:
+              s.append(vocab.by_index(idx+2)) # THIS IS SO GNARLY
+            else:
+              s.append(vocab.by_index(idx)) # THIS IS SO GNARLY
         r = ''.join(s)
         print r.strip()
 
@@ -271,59 +337,9 @@ def process_results(results):
     processed_results = list(results)
 
     for i in xrange(len(results)):
-      processed_results[i] = results[i].decode('utf-8').replace(u"\u2581"," ")[1:]
+      if using_sp:
+        processed_results[i] = results[i].decode('utf-8').replace(u"\u2581"," ")[1:]
+      else:
+        processed_results[i] = results[i]
 
     return processed_results
-
-#serve_interpolation("I love you.", "She saw the sun rising and knew that it was a bad sign for the future of the planet.")
-#quit()
-
-from flask import Flask
-from flask import request
-from flask import jsonify
-
-app = Flask(__name__)
-
-@app.route('/gradient', methods=['GET'])
-def gradient():
-    s1 = request.args.get('s1')[0:max_len]
-    s2 = request.args.get('s2')[0:max_len]
-    print("Interpolating:")
-    print(s1)
-    print(s2)
-    results = serve_interpolate(s1, s2)
-    results = process_results(results)
-    results = screen_results(results)
-    return jsonify({"results": results})
-
-@app.route('/neighborhood', methods=['GET'])
-def jitter():
-    s1 = request.args.get('s1')[0:max_len]
-    mag = request.args.get('mag') or 0.1
-    print("Exploring neighborhood around:")
-    print(s1)
-    results = serve_jitter(s1, mag)
-    results = process_results(results)
-    results = screen_results(results)
-    return jsonify({"results": results})
-
-@app.route('/get_z', methods=['GET'])
-def get_z():
-    #json = request.get_json()
-    s1 = request.args.get('s1')
-    print(s1)
-    z, text = serve_get_z(s1)
-    return jsonify({"z": z, "text": text})
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    #parser.add_argument('-z', default=100, type=int)
-    #parser.add_argument('-p', default=0.0, type=float)
-    #parser.add_argument('-alpha', default=0.2, type=float)
-    #parser.add_argument('-sample_size', default=128, type=int)
-    #parser.add_argument('-lstm_size', default=1000, type=int)
-    #parser.add_argument('-session', type=str)
-    args = parser.parse_args()
-    main(**vars(args))
-
-

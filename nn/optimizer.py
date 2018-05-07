@@ -137,7 +137,7 @@ class Optimizer:
 
         self.model.reset()
 
-        db.shuffle_and_make_batches()
+        #db.shuffle_and_make_batches()
 
         for idx in db.indices():
             c = self.test_net(idx)
@@ -175,7 +175,7 @@ class Optimizer:
             iteration = 0
             self.model.reset()
 
-            self.train_db.shuffle_and_make_batches()
+            #self.train_db.shuffle_and_make_batches()
             t = time.time()
 
             for idx in self.train_db.indices():

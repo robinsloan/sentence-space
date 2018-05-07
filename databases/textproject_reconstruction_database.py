@@ -12,14 +12,17 @@ class TextProjectReconstructionDatabase(object):
         self.phase = phase
         self.batch_size = batch_size
         self.max_len = max_len
-
+        self.sp_model = sp_model
+       
         self.vocab = Vocabulary()
 
-        if sp_model:
+        self.using_sp = (self.sp_model != None) and (len(self.sp_model) > 0)
+        if self.using_sp:
+            print("Using sentencepiece")
             import sentencepiece as spm # https://github.com/google/sentencepiece
 
             self.sp = spm.SentencePieceProcessor()
-            self.sp.Load(sp_model)
+            self.sp.Load(self.sp_model)
             sp_model_size = self.sp.GetPieceSize()
             print("Loaded SP model with", sp_model_size, "tokens")
             self.vocab.add('<pad>')
@@ -31,7 +34,6 @@ class TextProjectReconstructionDatabase(object):
 
         else:
             print("Using default fixed vocab")
-
             self.vocab.add('<pad>')
             self.vocab.add('<unk>')
             self.vocab.add('<end>')
@@ -57,10 +59,17 @@ class TextProjectReconstructionDatabase(object):
                 s = f.readline()
                 if s == "":
                     break
-                if len(s) <= max_len - 1:
+                if self.using_sp:
+                    chars = self.sp.EncodeAsIds(s)
+                    if len(chars) <= max_len - 1:
+                        self.sentences.append(s)
+                elif len(s) <= max_len - 1:
                     self.sentences.append(s)
                 #if len(self.sentences) >= 1000000:
                     #break
+
+
+        self.shuffle_sentences()
 
         valid_size = int(len(self.sentences) * 0.1)
 
@@ -78,39 +87,22 @@ class TextProjectReconstructionDatabase(object):
             print "Reducing valid set to 100 batches"
             self.batches_per_epoch = min(self.batches_per_epoch, 100)
 
-        self.shuffle_and_make_batches()
-
-        #x = self.make_batch()
-        x = self.batches[0]
+        x = self.make_batch()
 
         self.shared_x = theano.shared(x)
 
         self.index = T.iscalar()
 
-    def shuffle_and_make_batches(self):
+    def shuffle_sentences(self):
         # this all might be horribly inefficient but whatever
         t = time.time()
         print("Shuffling %s sentences..." % len(self.sentences))
-        batch_source = self.sentences[:]
-        numpy.random.shuffle(batch_source)
+        numpy.random.shuffle(self.sentences)
         print "...done. Took %s seconds" % round(time.time() - t)
 
-        t = time.time()
-        print("Making %s batches..." % self.batches_per_epoch)
-        self.batches = [None] * self.batches_per_epoch # sneaky
-        for i in xrange(self.batches_per_epoch):
-            self.batches[i] = numpy.zeros((self.max_len, self.batch_size))
-            for j in xrange(self.batch_size):
-                # idx = numpy.random.randint(len(batch_source))
-                # here we pop the last sentence out of the array entirely
-                self.batches[i][:, j] = self.to_inputs(batch_source.pop())
-                self.batches[i] = self.batches[i].astype('int32')
-                # there's probably some more efficient way to do that...
-        print "...done. Took %s minutes." % round((time.time() - t)/60)
-
     def to_inputs(self, sentence):
-        #print(sentence)
-        if self.sp:
+        sentence = sentence.replace("\n","")
+        if self.using_sp:
             #print(self.sp.EncodeAsPieces(sentence))
             chars = self.sp.EncodeAsIds(sentence)
         else:
@@ -121,6 +113,7 @@ class TextProjectReconstructionDatabase(object):
         return numpy.asarray(chars)
 
     # The original code drew random samples but didn't keep track of which had already been drawn. This seems not ideal to me so I am rewriting to make minibatches draw samples *without* replacement.
+    # EDIT: Now back to doing it the original way, because speed!
 
     def make_batch(self):
         batch = numpy.zeros((self.max_len, self.batch_size))
@@ -129,7 +122,7 @@ class TextProjectReconstructionDatabase(object):
             for i in xrange(self.batch_size):
                 idx = numpy.random.randint(len(self.sentences))
                 # here we pop the sentence out of the array entirely
-                batch[:, i] = self.to_inputs(self.sentences.pop(idx))
+                batch[:, i] = self.to_inputs(self.sentences[idx])
         else:
             idx = numpy.random.randint(len(self.sentences))
             max_len = len(self.sentences[idx])
@@ -157,6 +150,6 @@ class TextProjectReconstructionDatabase(object):
 
     def indices(self):
         for i in xrange(self.batches_per_epoch):
-            x = self.batches[i]
+            x = self.make_batch()
             self.shared_x.set_value(x)
             yield 0
