@@ -25,7 +25,7 @@ The requirements are:
 * Theano 0.9 (plus Nvidia's CUDA and cudnn)
 * Pandas 0.20.1
 * Matplotlib 2.0.2
-* [`sentencepiece`](https://github.com/google/sentencepiece) (if you want to use the included, pretrained model)
+* [`sentencepiece`](https://github.com/google/sentencepiece) (optional but nice to have)
 * [`wordfilter`](https://github.com/dariusk/wordfilter)
 
 One way to get started would be to use Anaconda:
@@ -44,6 +44,8 @@ pip install sentencepiece
 ```
 
 If you have those requirements installed, as well as CUDA and cudnn (which is A Whole Other Thing), it _should_ be possible to run `bash serve.sh` and get a server running. If that's not the case, open an issue and let me know. I definitely want to streamline this over time, and improve this documentation as well.
+
+The name of the trained model you want to serve is specified near the top of `textproject_server.py`. (Sorry it's not a command-line option; I just couldn't be bothered.) Try `sample_no_sp_2` to start.
 
 Once the server is running, the API is simple:
 
