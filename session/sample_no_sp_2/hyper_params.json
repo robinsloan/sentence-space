@@ -1,0 +1,1 @@
+{"vocab": "vocab.pkl", "max_len": 128, "lstm_size": 1000, "p": 0.0, "alpha": 0.3, "sp_model": null, "z": 128, "dataset": "data/scifi-plus-gutenberg.txt"}

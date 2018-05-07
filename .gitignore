@@ -4,5 +4,5 @@ data/*
 training_scripts/*
 
 session/*
-!session/sp15_trial/
 !session/sample_session/
+!session/sample_no_sp_2/
