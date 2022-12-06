@@ -1,6 +1,6 @@
 # Welcome to sentence space
 
-You can find an introduction to this project, with interactive demos, [here](https://www.robinsloan.com/voyages-in-sentence-space).
+You can find an introduction to this project [here](https://www.robinsloan.com/notes/voyages-in-sentence-space).
 
 This is a server designed to provide a couple of interesting artifacts. The core of it is a variational autoencoder that embeds sentences into a continuous space; as a result, you can select a point anywhere in that space and get a (more or less) coherent sentence back.
 
